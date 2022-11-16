@@ -3,8 +3,8 @@ const express = require('express');
 const router = express.Router();
 
 // Import model(s)
-const { Classroom } = require('../db/models');
-const { Op } = require('sequelize');
+const { Classroom, Supply, Student, StudentClassroom } = require('../db/models');
+const { Op, Model } = require('sequelize');
 
 // List of classrooms
 router.get('/', async (req, res, next) => {
@@ -32,16 +32,24 @@ router.get('/', async (req, res, next) => {
                     the studentLimit query parameter to equal the number
                 But if the studentLimit query parameter is NOT an integer, add
                     an error message of 'Student Limit should be a integer' to
-                    errorResult.errors 
+                    errorResult.errors
     */
     const where = {};
 
     // Your code here
+    if(req.query.name){
+        where.name = {[Op.like]:
+            '%'+req.query.name+'%'
+        }
+    }
+
+
 
     const classrooms = await Classroom.findAll({
         attributes: [ 'id', 'name', 'studentLimit' ],
-        where,
+        where: where,
         // Phase 1B: Order the Classroom search results
+        order: [['name']]
     });
 
     res.json(classrooms);
@@ -58,6 +66,7 @@ router.get('/:id', async (req, res, next) => {
                 // then firstName (both in ascending order)
                 // (Optional): No need to include the StudentClassrooms
         // Your code here
+        raw:true
     });
 
     if (!classroom) {
@@ -73,11 +82,56 @@ router.get('/:id', async (req, res, next) => {
         // Phase 5C: Calculate if the classroom is overloaded by comparing the
             // studentLimit of the classroom to the number of students in the
             // classroom
-        // Optional Phase 5D: Calculate the average grade of the classroom 
+        // Optional Phase 5D: Calculate the average grade of the classroom
     // Your code here
+    // let count = await Classroom.findByPk(
+    //     req.params.id,
+    //     {include: [{model: Supply, where: {
+    //         classroomId: req.params.id
+    //     }}]}
+    // )
+   let count = await Supply.findAll({
+    where: {
+        classroomId: req.params.id
+    }
+   })
+    count = count.length
+    // classroom.supplyCount = count
+    //classroom.toJSON()
+    classroom.supplyCount = count
+
+
+
+    let numOfStudents = await StudentClassroom.findAll({
+        where: {
+            classroomId: req.params.id
+        }
+    })
+    classroom.studentCount = numOfStudents.length
+
+
+
+    if(classroom.studentCount > classroom.studentLimit){
+        classroom.overloaded = true
+    }else{
+        classroom.overloaded = false
+    }
+
+    let studentGrades =  await StudentClassroom.findAll({
+        attributes: ['grade'],
+        where: {
+            classroomId: req.params.id
+        }
+    })
+
+    classroom.avgGrade = studentGrades.map(x => x.grade).reduce((a, b) => a + b, 0) / studentGrades.length
+
 
     res.json(classroom);
 });
+
+
+
 
 // Export class - DO NOT MODIFY
 module.exports = router;
